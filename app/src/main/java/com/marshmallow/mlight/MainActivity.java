@@ -19,6 +19,9 @@ import java.net.Socket;
 public class MainActivity extends AppCompatActivity {
 
     private LinearLayout layout;
+    private Socket s = null;
+    private BufferedReader in = null;
+    private OutputStream out = null;
 
     enum Status {
         CONNECTED_AND_ON,
@@ -38,9 +41,27 @@ public class MainActivity extends AppCompatActivity {
         ib.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                new SendLightCommandTask().execute();
+                if (s == null || s.isClosed()) {
+                    new Connect().execute();
+                } else {
+                    new SendLightCommandTask().execute();
+                }
             }
         });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            s.close();
+            in.close();
+            out.close();
+        } catch (IOException e) {
+            s = null;
+            in = null;
+            out = null;
+        }
     }
 
     private void uiUpdate(MainActivity.Status status) {
@@ -67,11 +88,10 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected MainActivity.Status doInBackground(Void... voids) {
             try {
-                Socket s = new Socket("192.168.1.4", 8006);
-                BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
+                s = new Socket("192.168.1.4", 8006);
+                in = new BufferedReader(new InputStreamReader(s.getInputStream()));
+                out = s.getOutputStream();
                 String ack = in.readLine();
-                in.close();
-                s.close();
                 if (ack != null) {
                     return ack.equals("on") ? MainActivity.Status.CONNECTED_AND_ON : MainActivity.Status.CONNECTED_AND_OFF;
                 } else {
@@ -93,22 +113,9 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected MainActivity.Status doInBackground(Void... voids) {
             try {
-                Socket s = new Socket("192.168.1.4", 8006);
-                BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
-                String ack = in.readLine();
-                if (ack != null && !ack.equals("off") && !ack.equals("on")) {
-                    in.close();
-                    s.close();
-                    return MainActivity.Status.DISCONNECTED;
-                }
-
-                OutputStream out = s.getOutputStream();
                 byte[] data = new byte[]{1};
                 out.write(data);
-                ack = in.readLine();
-                in.close();
-                out.close();
-                s.close();
+                String ack = in.readLine();
                 if (ack != null) {
                     return ack.equals("on") ? MainActivity.Status.CONNECTED_AND_ON : MainActivity.Status.CONNECTED_AND_OFF;
                 } else {
